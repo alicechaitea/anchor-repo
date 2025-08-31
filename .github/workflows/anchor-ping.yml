@@ -1,0 +1,28 @@
+name: Anchor Ping
+
+on:
+  schedule:
+    - cron: "0,30 1-12 * * *"   # ทุกครึ่งชั่วโมง ช่วง 01:00–12:00 (เวลาไทย)
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send ANCHOR:PING via SendGrid
+        env:
+          SENDGRID_API_KEY: ${{ secrets.SENDGRID_API_KEY }}
+          TO_EMAIL: ${{ secrets.ANCHOR_TO_EMAIL }}
+          FROM_EMAIL: ${{ secrets.ANCHOR_FROM_EMAIL }}
+        run: |
+          SUBJECT="ANCHOR:PING $(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          BODY='{
+            "personalizations":[{"to":[{"email":"'"$TO_EMAIL"'"}]}],
+            "from":{"email":"'"$FROM_EMAIL"'"},
+            "subject":"'"$SUBJECT"'",
+            "content":[{"type":"text/plain","value":"ok=true\nsource=github-actions\nwindow=01:00-12:00\ninterval=30m"}]
+          }'
+          curl -fsSL -X POST https://api.sendgrid.com/v3/mail/send \
+            -H "Authorization: Bearer $SENDGRID_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d "$BODY"
