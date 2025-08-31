@@ -1,0 +1,29 @@
+name: API Check
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"   # every 15 minutes (change if you want)
+  workflow_dispatch:          # lets you trigger manually from GitHub UI
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call API
+        env:
+          API_URL: ${{ secrets.API_URL }}         # e.g. https://api.example.com/status
+          API_KEY: ${{ secrets.API_KEY }}         # if needed
+          WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }} # Slack/Discord/Teams webhook
+        run: |
+          set -euo pipefail
+          RESP=$(curl -fsSL -H "Authorization: Bearer $API_KEY" "$API_URL")
+          echo "$RESP" | jq .
+
+          # ---- edit your condition here ----
+          OK=$(echo "$RESP" | jq -r '.ok')
+          if [ "$OK" != "true" ]; then
+            MSG=$(printf '*API Alert* %%0AStatus failed. Response: ```%s```' "$RESP")
+            curl -fsSL -X POST -H 'Content-type: application/json' \
+              --data "{\"text\":\"$MSG\"}" "$WEBHOOK_URL"
+            exit 1
+          fi
