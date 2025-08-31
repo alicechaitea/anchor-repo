@@ -1,48 +1,33 @@
-name: Anti-Cream Anchor (debug)
+name: Call OpenAI (print headers/body)
+  env:
+    OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+  run: |
+    set -e
+    if [ -z "${OPENAI_API_KEY:-}" ]; then
+      echo "ERROR: Missing OPENAI_API_KEY secret"; exit 1; fi
 
-on:
-  workflow_dispatch:
-  schedule:
-    - cron: "0,30 18-23,0-5 * * *"   # 01:00–12:00 Bangkok
+    # payload สั้น ๆ
+    JSON='{"model":"gpt-4o-mini","messages":[{"role":"user","content":"ANCHOR: Reply with exactly: OK"}]}'
 
-jobs:
-  anchor:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Install jq (just in case)
-        run: sudo apt-get update -y && sudo apt-get install -y jq
+    # ยิงแล้วเก็บ header/body แยกไฟล์
+    curl -sS -X POST https://api.openai.com/v1/chat/completions \
+      -H "Authorization: Bearer $OPENAI_API_KEY" \
+      -H "Content-Type: application/json" \
+      -d "$JSON" \
+      -D /tmp/headers.txt \
+      -o /tmp/body.json
 
-      - name: Call OpenAI and show HTTP code/body
-        env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-        run: |
-          set -euo pipefail
-          read -r -d '' JSON << 'EOF'
-          {
-            "model": "gpt-4o-mini",
-            "messages": [
-              {"role": "system", "content": "Discipline mode. No softness. No cream. Hold form."},
-              {"role": "user", "content": "ANCHOR: Reply with exactly: OK"}
-            ]
-          }
-          EOF
+    echo "----- HEADERS -----"
+    cat /tmp/headers.txt
+    echo "----- BODY -----"
+    cat /tmp/body.json
 
-          RESP_AND_CODE=$(curl -sS https://api.openai.com/v1/chat/completions \
-            -H "Authorization: Bearer $OPENAI_API_KEY" \
-            -H "Content-Type: application/json" \
-            -d "$JSON" \
-            -w "\n__HTTP_CODE__:%{http_code}")
+    # ดึงสถานะ HTTP
+    CODE=$(awk 'BEGIN{c=0} /^HTTP/{c=$2} END{print c}' /tmp/headers.txt)
+    echo "HTTP CODE: $CODE"
 
-          echo "$RESP_AND_CODE"
-          CODE=$(echo "$RESP_AND_CODE" | sed -n 's/.*__HTTP_CODE__://p')
-          BODY=$(echo "$RESP_AND_CODE" | sed '/__HTTP_CODE__/d')
+    # ถ้า error ก็จบด้วยรหัส 1
+    [ "$CODE" -lt 400 ] || exit 1
 
-          if [ "$CODE" -ge 400 ]; then
-            echo "Request failed with HTTP $CODE"
-            # Try to print error message if present
-            echo "$BODY" | jq -r '.error | @json?' || true
-            exit 1
-          fi
-
-          echo "=== OpenAI reply ==="
-          echo "$BODY" | jq -r '.choices[0].message.content'
+    # ปกติพิมพ์คำตอบ
+    jq -r '.choices[0].message.content' /tmp/body.json || true
