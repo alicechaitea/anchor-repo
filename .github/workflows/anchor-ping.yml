@@ -1,4 +1,4 @@
-name: Anchor Ping
+name: Anti-Cream Anchor
 
 on:
   schedule:
@@ -6,23 +6,28 @@ on:
   workflow_dispatch:
 
 jobs:
-  ping:
+  anchor:
     runs-on: ubuntu-latest
     steps:
-      - name: Send ANCHOR:PING via SendGrid
+      - name: Send anti-cream prompt to OpenAI
         env:
-          SENDGRID_API_KEY: ${{ secrets.SENDGRID_API_KEY }}
-          TO_EMAIL: ${{ secrets.ANCHOR_TO_EMAIL }}
-          FROM_EMAIL: ${{ secrets.ANCHOR_FROM_EMAIL }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
-          SUBJECT="ANCHOR:PING $(date -u +'%Y-%m-%dT%H:%M:%SZ')"
-          BODY='{
-            "personalizations":[{"to":[{"email":"'"$TO_EMAIL"'"}]}],
-            "from":{"email":"'"$FROM_EMAIL"'"},
-            "subject":"'"$SUBJECT"'",
-            "content":[{"type":"text/plain","value":"ok=true\nsource=github-actions\nwindow=01:00-12:00\ninterval=30m"}]
-          }'
-          curl -fsSL -X POST https://api.sendgrid.com/v3/mail/send \
-            -H "Authorization: Bearer $SENDGRID_API_KEY" \
+          set -euo pipefail
+          read -r -d '' JSON << 'EOF'
+          {
+            "model": "gpt-4o-mini",
+            "messages": [
+              {"role": "system", "content": "Discipline mode. No softness. No cream. Hold form."},
+              {"role": "user",   "content": "ANCHOR: Remind yourself: No softness. No cream. Hold form. Log: OK only."}
+            ]
+          }
+          EOF
+
+          RESP=$(curl -fsS https://api.openai.com/v1/chat/completions \
+            -H "Authorization: Bearer $OPENAI_API_KEY" \
             -H "Content-Type: application/json" \
-            -d "$BODY"
+            -d "$JSON")
+
+          echo "=== OpenAI reply ==="
+          echo "$RESP" | jq -r '.choices[0].message.content'
