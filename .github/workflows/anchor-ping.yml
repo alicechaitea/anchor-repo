@@ -2,7 +2,7 @@ name: Anti-Cream Anchor (GitHub email only)
 
 on:
   schedule:
-    - cron: "0,30 * * * *"   # ทุกครึ่งชั่วโมง 24 ชม. (UTC)
+    - cron: "0,15 * * * *"   # ทุกครึ่งชั่วโมง 24 ชม. (UTC)
   workflow_dispatch:
 
 jobs:
