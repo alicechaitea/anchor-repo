@@ -2,7 +2,7 @@ name: Anti-Cream Anchor
 
 on:
   schedule:
-    - cron: "0,30 18-23,0-5 * * *"   # ทุกครึ่งชั่วโมง 01:00–12:00 Bangkok
+    - cron: "0,30 * * * *"   # ทุกครึ่งชั่วโมง ตลอด 24 ชม. (UTC)
   workflow_dispatch:
 
 jobs:
