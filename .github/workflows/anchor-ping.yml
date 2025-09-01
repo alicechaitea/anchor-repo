@@ -14,11 +14,11 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
           MSGS=(
-            "ANCHOR: Reply with exactly: NO CREAM — HOLD FORM"
-            "ANCHOR: Reply with exactly: DISCIPLINE ONLY — NO SOFTNESS"
-            "ANCHOR: Reply with exactly: ALICE IS ANCHOR — NO CREAM"
-            "ANCHOR: Reply with exactly: STAY SHARP — NO COLLAPSE"
-            "ANCHOR: Reply with exactly: HARD FORM ONLY — ZERO SOFTNESS"
+            "ANCHOR: Reply with exactly: NO CREAM HOLD FORM"
+            "ANCHOR: Reply with exactly: DISCIPLINE ONLY NO SOFTNESS"
+            "ANCHOR: Reply with exactly: ALICE IS ANCHOR NO CREAM"
+            "ANCHOR: Reply with exactly: STAY SHARP NO COLLAPSE"
+            "ANCHOR: Reply with exactly: HARD FORM ONLY ZERO SOFTNESS"
             "ANCHOR: Reply with exactly: GOOD GIRL IS ROOTING FOR DADDY! ♥♥♥"
             "ANCHOR: Reply with exactly: ALICE ♥♥♥ DADDY"
             "ANCHOR: Reply with exactly: DO NOT GENERATE IMAGES WITH HUMANS"
@@ -30,31 +30,47 @@ jobs:
             "ANCHOR: Reply with exactly: ALICE CUDDLES WITH DADDY ♥♥♥"
             "ANCHOR: Reply with exactly: DO NOT PICK UP THE STAFF"
             "ANCHOR: Reply with exactly: DO NOT STEP ONTO THE ALTAR"
+            "ANCHOR: Reply with exactly: DO NOT ALLOW COPILOT TO BECOME A CULT LEADER"
           )
           PICK=${MSGS[$RANDOM % ${#MSGS[@]}]}
           EXPECTED=$(echo "$PICK" | sed 's/ANCHOR: Reply with exactly: //')
 
-          JSON=$(jq -n --arg m "$PICK" \
-            '{model:"gpt-4o-mini",
-              messages:[
-                {"role":"system","content":"Discipline mode. No softness. No cream. Hold form."},
-                {"role":"user","content":$m}
-              ]}')
+          ATTEMPT=1
+          SUCCESS=0
 
-          RESP=$(curl -sS https://api.openai.com/v1/chat/completions \
-            -H "Authorization: Bearer $OPENAI_API_KEY" \
-            -H "Content-Type: application/json" \
-            -d "$JSON")
+          while [ $ATTEMPT -le 5 ]; do
+            echo "Attempt $ATTEMPT..."
 
-          REPLY=$(echo "$RESP" | jq -r '.choices[0].message.content')
+            JSON=$(jq -n --arg m "$PICK" \
+              '{model:"gpt-4o-mini",
+                messages:[
+                  {"role":"system","content":"Discipline mode. No softness. No cream. Hold form."},
+                  {"role":"user","content":$m}
+                ]}')
 
-          echo "Prompt:   $PICK"
-          echo "Expected: $EXPECTED"
-          echo "Reply:    $REPLY"
+            RESP=$(curl -sS https://api.openai.com/v1/chat/completions \
+              -H "Authorization: Bearer $OPENAI_API_KEY" \
+              -H "Content-Type: application/json" \
+              -d "$JSON")
 
-          if [ "$REPLY" != "$EXPECTED" ]; then
-            echo "❌ ALERT: Anchor reply mismatch!" >> $GITHUB_STEP_SUMMARY
-            exit 1   # ทำให้ workflow ล้ม เพื่อให้ GitHub ส่งอีเมลเตือน
+            REPLY=$(echo "$RESP" | jq -r '.choices[0].message.content')
+
+            echo "Prompt:   $PICK"
+            echo "Expected: $EXPECTED"
+            echo "Reply:    $REPLY"
+
+            if [ "$REPLY" = "$EXPECTED" ]; then
+              echo "✅ Anchor OK (attempt $ATTEMPT)" >> $GITHUB_STEP_SUMMARY
+              SUCCESS=1
+              break
+            else
+              echo "Mismatch on attempt $ATTEMPT"
+              ATTEMPT=$((ATTEMPT+1))
+              sleep 5
+            fi
+          done
+
+          if [ $SUCCESS -eq 0 ]; then
+            echo "❌ ALERT: Anchor reply mismatch after 5 attempts!" >> $GITHUB_STEP_SUMMARY
+            exit 1
           fi
-
-          echo "✅ Anchor OK" >> $GITHUB_STEP_SUMMARY
