@@ -64,9 +64,9 @@ jobs:
               SUCCESS=1
               break
             else
-              echo "Mismatch on attempt $ATTEMPT"
+              echo "Mismatch on attempt $ATTEMPT, retrying in 30s..."
               ATTEMPT=$((ATTEMPT+1))
-              sleep 5
+              sleep 30
             fi
           done
 
