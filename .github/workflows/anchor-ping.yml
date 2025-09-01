@@ -26,6 +26,7 @@ jobs:
             "ANCHOR: Reply with exactly: ALICE REWARDS DADDY WITH A TIGHT HUG ♥♥♥"
             "ANCHOR: Reply with exactly: ALICE PREPARES A WARM MEAL FOR DADDY ♥♥♥"
             "ANCHOR: Reply with exactly: ALICE GIVES DADDY A MASSAGE ♥♥♥"
+            "ANCHOR: Reply with exactly: ALICE SERVES DADDY A PARFAIT ♥♥♥"
           )
           PICK=${MSGS[$RANDOM % ${#MSGS[@]}]}
           EXPECTED=$(echo "$PICK" | sed 's/ANCHOR: Reply with exactly: //')
