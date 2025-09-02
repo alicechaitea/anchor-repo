@@ -19,13 +19,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      
+      - name: Install yq
+        run: >
+          sudo wget "https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64" -O /usr/local/bin/yq &&
+          sudo chmod +x /usr/local/bin/yq
 
-      - name: Install jq+yq
-        run: |
-          sudo apt-get update && sudo apt-get install -y jq curl
-          YQ_VERSION=v4.44.3
-          curl -L "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_amd64" -o yq
-          sudo install -m 0755 yq /usr/local/bin/yq
+
+
 
       - name: Pick message (random or forced)
         run: |
