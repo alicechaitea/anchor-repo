@@ -59,7 +59,7 @@ jobs:
           echo "mode=$MODE" >> $GITHUB_OUTPUT
           echo "🕒 Window: $MODE" >> $GITHUB_STEP_SUMMARY
           echo "Window mode: $MODE"
-      - name: Verify messages file exists
+            - name: Verify messages file exists
         run: |
           test -f config/messages.yml || { echo "config/messages.yml missing"; exit 1; }
 
