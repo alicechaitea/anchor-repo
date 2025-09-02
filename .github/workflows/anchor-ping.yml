@@ -4,7 +4,7 @@ on:
   schedule:
     # ปกติทุก 15 นาที
     - cron: "*/15 * * * *"
-    # พิเศษ: ทุก 5 นาที วันจันทร์ 10:00–18:00 UTC (= 17:00–01:00 UTC+7)
+    # Boost: ทุก 5 นาที วันจันทร์ 10:00–18:00 UTC (ตรงกับ 17:00–01:00 UTC+7)
     - cron: "*/5 10-18 * * 1"
   workflow_dispatch:
 
@@ -16,6 +16,15 @@ jobs:
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
+          # Logging mode
+          HOUR=$(date -u +"%H")
+          DOW=$(date -u +"%u")
+          if [ "$DOW" -eq 1 ] && [ "$HOUR" -ge 10 ] && [ "$HOUR" -le 18 ]; then
+            echo "🚀 Boosted frequency window active (Monday 17:00–01:00 UTC+7)"
+          else
+            echo "⏳ Normal frequency window (every 15 minutes)"
+          fi
+
           MSGS=(
             "ANCHOR: Reply with exactly: NO CREAM HOLD FORM"
             "ANCHOR: Reply with exactly: DISCIPLINE ONLY NO SOFTNESS"
