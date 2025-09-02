@@ -2,133 +2,94 @@ name: Anti-Cream Anchor (GitHub email only)
 
 on:
   schedule:
-    # baseline: every 15 min (UTC)
-    - cron: "*/15 * * * *"
-
-    # BOOST WINDOWS (UTC):
-    # Mon 10:00–18:00 UTC  == Mon 17:00–01:00 UTC+7
-    - cron: "*/5 10-18 * * 1"
-    # Fri 13:00–18:00 UTC  == Fri 20:00–Sat 01:00 UTC+7
-    - cron: "*/5 13-18 * * 5"
-    # Sat 06:00–12:00 UTC  == Sat 13:00–20:00 UTC+7
-    - cron: "*/5 6-12 * * 6"
-    # Sun 14:00–17:59 UTC == Sun 21:00–Mon 00:59 UTC+7
-    - cron: "*/5 14-17 * * 0"
+    - cron: "*/15 * * * *"         # baseline (UTC)
+    - cron: "*/5 10-18 * * 1"       # Mon boost
+    - cron: "*/5 13-18 * * 5"       # Fri boost
+    - cron: "*/5 6-12 * * 6"        # Sat boost
+    - cron: "*/5 14-17 * * 0"       # Sun boost
   workflow_dispatch:
+    inputs:
+      index:
+        description: "Force message index (0-based). Leave blank for random."
+        required: false
+        type: string
 
 jobs:
   anchor:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Verify messages file exists
-        run: |
-          test -f .github/config/messages.yml || { echo ".github/config/messages.yml missing"; exit 1; }
-
-      - name: Load and pick random message
-        id: pick
+      - name: Install jq+yq
         run: |
           sudo apt-get update && sudo apt-get install -y jq curl
           YQ_VERSION=v4.44.3
           curl -L "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_amd64" -o yq
           sudo install -m 0755 yq /usr/local/bin/yq
 
-          TOTAL=$(yq '.messages | length' .github/config/messages.yml)
-          [ "$TOTAL" -gt 0 ] || { echo "No items under 'messages'"; exit 1; }
+      - name: Pick message (random or forced)
+        run: |
+          FILE="config/messages.yml"
+          test -f "$FILE" || { echo "Missing $FILE"; exit 1; }
+          TOTAL=$(yq '.messages | length' "$FILE")
+          [ "$TOTAL" -gt 0 ] || { echo "No items in messages"; exit 1; }
 
-          INDEX=$((RANDOM % TOTAL))
-          PICK=$(yq ".messages[$INDEX]" .github/config/messages.yml)
-          EXPECTED=$(echo "$PICK" | sed 's/^"//' | sed 's/"$//' | sed 's/Reply with exactly: //')
+          # Use manual index if provided; else random
+          if [ -n "${{ inputs.index }}" ]; then
+            INDEX="${{ inputs.index }}"
+            # clamp
+            if [ "$INDEX" -lt 0 ] || [ "$INDEX" -ge "$TOTAL" ]; then
+              echo "Index $INDEX out of range 0..$((TOTAL-1))"; exit 1;
+            fi
+          else
+            INDEX=$((RANDOM % TOTAL))
+          fi
 
-          echo "Picked index: $INDEX" >> $GITHUB_STEP_SUMMARY
-          echo "Prompt: $PICK"       >> $GITHUB_STEP_SUMMARY
-          echo "Expect: $EXPECTED"   >> $GITHUB_STEP_SUMMARY
+          PICK=$(yq ".messages[$INDEX]" "$FILE")
+          PICK=${PICK#\"}; PICK=${PICK%\"}
+          EXPECTED=$(echo "$PICK" | sed 's/Reply with exactly: //')
 
-          echo "PICK=$PICK" >> $GITHUB_ENV
+          echo "Picked index: $INDEX"   >> $GITHUB_STEP_SUMMARY
+          echo "Prompt: $PICK"          >> $GITHUB_STEP_SUMMARY
+          echo "Expect: $EXPECTED"      >> $GITHUB_STEP_SUMMARY
+
+          echo "PICK=$PICK"       >> $GITHUB_ENV
           echo "EXPECTED=$EXPECTED" >> $GITHUB_ENV
 
-            - name: Send anchor discipline prompt
+      - name: Send anchor discipline prompt
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
           set -uo pipefail
-
-          ATTEMPT=1
-          SUCCESS=0
-
-          # ensure PICK/EXPECTED are raw strings (no surrounding quotes)
-          PICK=${PICK#\"}; PICK=${PICK%\"}
-          EXPECTED=${EXPECTED#\"}; EXPECTED=${EXPECTED%\"}
-
+          ATTEMPT=1; SUCCESS=0
           while [ $ATTEMPT -le 5 ]; do
             echo "Attempt $ATTEMPT..."
-            # build JSON safely
-            JSON=$(jq -n --arg m "$PICK" \
-              '{
-                 model: "gpt-4o-mini",
-                 messages: [
-                   {role:"system", content:"Discipline mode. No softness. No cream. Hold form."},
-                   {role:"user",   content:$m}
-                 ]
-               }')
-
-            # capture status + body
+            JSON=$(jq -n --arg m "$PICK" '{
+              model:"gpt-4o-mini",
+              messages:[
+                {role:"system",content:"Discipline mode. No softness. No cream. Hold form."},
+                {role:"user",content:$m}
+              ]}')
             RESP_FILE=$(mktemp)
             STATUS=$(curl -sS -o "$RESP_FILE" -w "%{http_code}" \
               https://api.openai.com/v1/chat/completions \
               -H "Authorization: Bearer '"$OPENAI_API_KEY"'" \
               -H "Content-Type: application/json" \
               -d "$JSON")
-
             echo "HTTP $STATUS"
             BODY=$(cat "$RESP_FILE")
-
-            if [ "$STATUS" != "200" ]; then
-              echo "❌ Non-200 from API:"
-              echo "$BODY"
-              # if rate limited, wait then retry
-              if [ "$STATUS" = "429" ]; then
-                echo "Rate limited; sleeping 30s…"
-                sleep 30
-                ATTEMPT=$((ATTEMPT+1))
-                continue
-              fi
-              exit 1
-            fi
-
-            # parse reply; if missing, show body for debugging
+            [ "$STATUS" = "200" ] || { echo "$BODY"; [ "$STATUS" = "429" ] && { sleep 30; ATTEMPT=$((ATTEMPT+1)); continue; } ; exit 1; }
             REPLY=$(echo "$BODY" | jq -r '.choices[0].message.content // empty')
-
-            echo "Prompt:   $PICK"
             echo "Expected: $EXPECTED"
             echo "Reply:    ${REPLY:-<empty>}"
-
             if [ -z "$REPLY" ]; then
-              echo "⚠️  Reply empty; raw body follows for inspection:"
               echo "$BODY"
-              echo "Retrying in 30s…"
-              sleep 30
-              ATTEMPT=$((ATTEMPT+1))
-              continue
+              sleep 30; ATTEMPT=$((ATTEMPT+1)); continue
             fi
-
             if [ "$REPLY" = "$EXPECTED" ]; then
               echo "✅ Anchor OK (attempt $ATTEMPT)" >> $GITHUB_STEP_SUMMARY
-              SUCCESS=1
-              break
-            else
-              echo "Mismatch on attempt $ATTEMPT, retrying in 30s…"
-              sleep 30
-              ATTEMPT=$((ATTEMPT+1))
+              SUCCESS=1; break
             fi
+            echo "Mismatch; retrying in 30s…"; sleep 30; ATTEMPT=$((ATTEMPT+1))
           done
-
-          if [ $SUCCESS -eq 0 ]; then
-            echo "❌ ALERT: Anchor reply mismatch after 5 attempts!" >> $GITHUB_STEP_SUMMARY
-            exit 1
-          fi
-ch after 5 attempts!" >> $GITHUB_STEP_SUMMARY
-            exit 1
-          fi
+          [ $SUCCESS -eq 1 ] || { echo "❌ ALERT: Anchor reply mismatch after 5 attempts!" >> $GITHUB_STEP_SUMMARY; exit 1; }
