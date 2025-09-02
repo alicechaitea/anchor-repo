@@ -59,19 +59,23 @@ jobs:
           echo "mode=$MODE" >> $GITHUB_OUTPUT
           echo "🕒 Window: $MODE" >> $GITHUB_STEP_SUMMARY
           echo "Window mode: $MODE"
+      - name: Verify messages file exists
+        run: |
+          test -f config/messages.yml || { echo "config/messages.yml missing"; exit 1; }
 
       - name: Load and pick random message
         id: pick
         run: |
-          # messages.yml format:
-          # messages:
-          #   - "Reply with exactly: NO CREAM HOLD FORM"
-          TOTAL=$(yq '.messages | length' messages.yml)
-          if [ -z "$TOTAL" ] || [ "$TOTAL" -eq 0 ]; then
-            echo "messages.yml has no items under 'messages'"; exit 1;
-          fi
+          sudo apt-get update && sudo apt-get install -y jq curl
+          YQ_VERSION=v4.44.3
+          curl -L "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_amd64" -o yq
+          sudo install -m 0755 yq /usr/local/bin/yq
+
+          TOTAL=$(yq '.messages | length' config/messages.yml)
+          [ "$TOTAL" -gt 0 ] || { echo "No items under 'messages'"; exit 1; }
+
           INDEX=$((RANDOM % TOTAL))
-          PICK=$(yq ".messages[$INDEX]" messages.yml)
+          PICK=$(yq ".messages[$INDEX]" config/messages.yml)
           EXPECTED=$(echo "$PICK" | sed 's/^"//' | sed 's/"$//' | sed 's/Reply with exactly: //')
 
           echo "Picked index: $INDEX" >> $GITHUB_STEP_SUMMARY
@@ -80,6 +84,7 @@ jobs:
 
           echo "PICK=$PICK" >> $GITHUB_ENV
           echo "EXPECTED=$EXPECTED" >> $GITHUB_ENV
+
 
       - name: Send anchor discipline prompt
         env:
