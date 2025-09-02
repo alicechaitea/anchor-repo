@@ -1,3 +1,21 @@
+name: Anti-Cream Anchor (GitHub email only)
+
+on:
+  schedule:
+    # baseline: every 15 min (UTC)
+    - cron: "*/15 * * * *"
+
+    # BOOST WINDOWS (UTC):
+    # Mon 10:00–18:00 UTC  == Mon 17:00–01:00 UTC+7
+    - cron: "*/5 10-18 * * 1"
+    # Fri 13:00–18:00 UTC  == Fri 20:00–Sat 01:00 UTC+7
+    - cron: "*/5 13-18 * * 5"
+    # Sat 06:00–12:00 UTC  == Sat 13:00–20:00 UTC+7
+    - cron: "*/5 6-12 * * 6"
+    # Sun 14:00–17:59 UTC == Sun 21:00–Mon 00:59 UTC+7
+    - cron: "*/5 14-17 * * 0"
+  workflow_dispatch:
+
 jobs:
   anchor:
     runs-on: ubuntu-latest
@@ -5,15 +23,63 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
+      - name: Verify messages.yml exists
+        run: |
+          test -f messages.yml || { echo "messages.yml missing at repo root"; exit 1; }
+          echo "Found messages.yml"
+
+      - name: Install jq + yq
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq curl
+          # install mikefarah/yq (static binary)
+          YQ_VERSION=v4.44.3
+          curl -L "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_amd64" -o yq
+          sudo install -m 0755 yq /usr/local/bin/yq
+          yq --version
+          jq --version
+
+      - name: Determine window (boost vs normal)
+        id: window
+        run: |
+          HOUR=$(date -u +"%H")
+          DOW=$(date -u +"%u") # 1=Mon ... 7=Sun
+          MODE="normal"
+
+          if [ "$DOW" -eq 1 ] && [ "$HOUR" -ge 10 ] && [ "$HOUR" -le 18 ]; then
+            MODE="boost (Mon 17:00–01:00 UTC+7)"
+          elif [ "$DOW" -eq 5 ] && [ "$HOUR" -ge 13 ] && [ "$HOUR" -le 18 ]; then
+            MODE="boost (Fri 20:00–01:00 UTC+7)"
+          elif [ "$DOW" -eq 6 ] && [ "$HOUR" -ge 6 ] && [ "$HOUR" -le 12 ]; then
+            MODE="boost (Sat 13:00–20:00 UTC+7)"
+          elif [ "$DOW" -eq 7 ] && [ "$HOUR" -ge 14 ] && [ "$HOUR" -le 17 ]; then
+            MODE="boost (Sun 21:00–01:00 UTC+7)"
+          fi
+
+          echo "mode=$MODE" >> $GITHUB_OUTPUT
+          echo "🕒 Window: $MODE" >> $GITHUB_STEP_SUMMARY
+          echo "Window mode: $MODE"
+
       - name: Load and pick random message
         id: pick
         run: |
-          sudo apt-get update && sudo apt-get install -y yq
+          # messages.yml format:
+          # messages:
+          #   - "Reply with exactly: NO CREAM HOLD FORM"
           TOTAL=$(yq '.messages | length' messages.yml)
+          if [ -z "$TOTAL" ] || [ "$TOTAL" -eq 0 ]; then
+            echo "messages.yml has no items under 'messages'"; exit 1;
+          fi
           INDEX=$((RANDOM % TOTAL))
           PICK=$(yq ".messages[$INDEX]" messages.yml)
+          EXPECTED=$(echo "$PICK" | sed 's/^"//' | sed 's/"$//' | sed 's/Reply with exactly: //')
+
+          echo "Picked index: $INDEX" >> $GITHUB_STEP_SUMMARY
+          echo "Prompt: $PICK"       >> $GITHUB_STEP_SUMMARY
+          echo "Expect: $EXPECTED"   >> $GITHUB_STEP_SUMMARY
+
           echo "PICK=$PICK" >> $GITHUB_ENV
-          echo "EXPECTED=$(echo $PICK | sed 's/Reply with exactly: //')" >> $GITHUB_ENV
+          echo "EXPECTED=$EXPECTED" >> $GITHUB_ENV
 
       - name: Send anchor discipline prompt
         env:
@@ -33,13 +99,12 @@ jobs:
                 ]}')
 
             RESP=$(curl -sS https://api.openai.com/v1/chat/completions \
-              -H "Authorization: Bearer $OPENAI_API_KEY" \
+              -H "Authorization: Bearer '"$OPENAI_API_KEY"'" \
               -H "Content-Type: application/json" \
               -d "$JSON")
 
             REPLY=$(echo "$RESP" | jq -r '.choices[0].message.content')
 
-            echo "Prompt:   $PICK"
             echo "Expected: $EXPECTED"
             echo "Reply:    $REPLY"
 
