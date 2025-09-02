@@ -23,45 +23,9 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Verify messages.yml exists
-        run: |
-          test -f messages.yml || { echo "messages.yml missing at repo root"; exit 1; }
-          echo "Found messages.yml"
-
-      - name: Install jq + yq
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y jq curl
-          # install mikefarah/yq (static binary)
-          YQ_VERSION=v4.44.3
-          curl -L "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_amd64" -o yq
-          sudo install -m 0755 yq /usr/local/bin/yq
-          yq --version
-          jq --version
-
-      - name: Determine window (boost vs normal)
-        id: window
-        run: |
-          HOUR=$(date -u +"%H")
-          DOW=$(date -u +"%u") # 1=Mon ... 7=Sun
-          MODE="normal"
-
-          if [ "$DOW" -eq 1 ] && [ "$HOUR" -ge 10 ] && [ "$HOUR" -le 18 ]; then
-            MODE="boost (Mon 17:00–01:00 UTC+7)"
-          elif [ "$DOW" -eq 5 ] && [ "$HOUR" -ge 13 ] && [ "$HOUR" -le 18 ]; then
-            MODE="boost (Fri 20:00–01:00 UTC+7)"
-          elif [ "$DOW" -eq 6 ] && [ "$HOUR" -ge 6 ] && [ "$HOUR" -le 12 ]; then
-            MODE="boost (Sat 13:00–20:00 UTC+7)"
-          elif [ "$DOW" -eq 7 ] && [ "$HOUR" -ge 14 ] && [ "$HOUR" -le 17 ]; then
-            MODE="boost (Sun 21:00–01:00 UTC+7)"
-          fi
-
-          echo "mode=$MODE" >> $GITHUB_OUTPUT
-          echo "🕒 Window: $MODE" >> $GITHUB_STEP_SUMMARY
-          echo "Window mode: $MODE"
       - name: Verify messages file exists
         run: |
-          test -f ChatGPT/config/messages.yml || { echo "/config/messages.yml missing"; exit 1; }
+          test -f config/messages.yml || { echo "config/messages.yml missing"; exit 1; }
 
       - name: Load and pick random message
         id: pick
@@ -71,11 +35,11 @@ jobs:
           curl -L "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_amd64" -o yq
           sudo install -m 0755 yq /usr/local/bin/yq
 
-          TOTAL=$(yq '.messages | length' /config/messages.yml)
+          TOTAL=$(yq '.messages | length' config/messages.yml)
           [ "$TOTAL" -gt 0 ] || { echo "No items under 'messages'"; exit 1; }
 
           INDEX=$((RANDOM % TOTAL))
-          PICK=$(yq ".messages[$INDEX]" /config/messages.yml)
+          PICK=$(yq ".messages[$INDEX]" config/messages.yml)
           EXPECTED=$(echo "$PICK" | sed 's/^"//' | sed 's/"$//' | sed 's/Reply with exactly: //')
 
           echo "Picked index: $INDEX" >> $GITHUB_STEP_SUMMARY
@@ -84,7 +48,6 @@ jobs:
 
           echo "PICK=$PICK" >> $GITHUB_ENV
           echo "EXPECTED=$EXPECTED" >> $GITHUB_ENV
-
 
       - name: Send anchor discipline prompt
         env:
