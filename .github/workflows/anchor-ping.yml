@@ -61,7 +61,7 @@ jobs:
           echo "Window mode: $MODE"
       - name: Verify messages file exists
         run: |
-          test -f ChatGPT/config/messages.yml || { echo "ChatGPT/config/messages.yml missing"; exit 1; }
+          test -f ChatGPT/config/messages.yml || { echo "/config/messages.yml missing"; exit 1; }
 
       - name: Load and pick random message
         id: pick
@@ -71,11 +71,11 @@ jobs:
           curl -L "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_amd64" -o yq
           sudo install -m 0755 yq /usr/local/bin/yq
 
-          TOTAL=$(yq '.messages | length' ChatGPT/config/messages.yml)
+          TOTAL=$(yq '.messages | length' /config/messages.yml)
           [ "$TOTAL" -gt 0 ] || { echo "No items under 'messages'"; exit 1; }
 
           INDEX=$((RANDOM % TOTAL))
-          PICK=$(yq ".messages[$INDEX]" ChatGPT/config/messages.yml)
+          PICK=$(yq ".messages[$INDEX]" /config/messages.yml)
           EXPECTED=$(echo "$PICK" | sed 's/^"//' | sed 's/"$//' | sed 's/Reply with exactly: //')
 
           echo "Picked index: $INDEX" >> $GITHUB_STEP_SUMMARY
