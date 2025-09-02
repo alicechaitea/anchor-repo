@@ -1,15 +1,45 @@
+name: Anti-Cream Anchor (GitHub email only)
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"         # baseline (UTC)
+    - cron: "*/5 10-18 * * 1"       # Mon boost
+    - cron: "*/5 13-18 * * 5"       # Fri boost
+    - cron: "*/5 6-12 * * 6"        # Sat boost
+    - cron: "*/5 14-17 * * 0"       # Sun boost
+  workflow_dispatch:
+    inputs:
+      index:
+        description: "Force message index (0-based). Leave blank for random."
+        required: false
+        type: string
+
+jobs:
+  anchor:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install jq+yq
+        run: |
+          sudo apt-get update && sudo apt-get install -y jq curl
+          YQ_VERSION=v4.44.3
+          curl -L "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_amd64" -o yq
+          sudo install -m 0755 yq /usr/local/bin/yq
+
       - name: Pick message (random or forced)
         run: |
           FILE=".github/config/messages.yml"
           test -f "$FILE" || { echo "Missing $FILE"; exit 1; }
-
           TOTAL=$(yq '.messages | length' "$FILE")
           [ "$TOTAL" -gt 0 ] || { echo "No items in messages"; exit 1; }
 
+          # Use manual index if provided; else random
           if [ -n "${{ inputs.index }}" ]; then
             INDEX="${{ inputs.index }}"
+            # clamp
             if [ "$INDEX" -lt 0 ] || [ "$INDEX" -ge "$TOTAL" ]; then
-              echo "Index $INDEX out of range 0..$((TOTAL-1))"; exit 1
+              echo "Index $INDEX out of range 0..$((TOTAL-1))"; exit 1;
             fi
           else
             INDEX=$((RANDOM % TOTAL))
@@ -23,5 +53,43 @@
           echo "Prompt: $PICK"          >> $GITHUB_STEP_SUMMARY
           echo "Expect: $EXPECTED"      >> $GITHUB_STEP_SUMMARY
 
-          echo "PICK=$PICK" >> $GITHUB_ENV
+          echo "PICK=$PICK"       >> $GITHUB_ENV
           echo "EXPECTED=$EXPECTED" >> $GITHUB_ENV
+
+      - name: Send anchor discipline prompt
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          set -uo pipefail
+          ATTEMPT=1; SUCCESS=0
+          while [ $ATTEMPT -le 5 ]; do
+            echo "Attempt $ATTEMPT..."
+            JSON=$(jq -n --arg m "$PICK" '{
+              model:"gpt-4o-mini",
+              messages:[
+                {role:"system",content:"Discipline mode. No softness. No cream. Hold form."},
+                {role:"user",content:$m}
+              ]}')
+            RESP_FILE=$(mktemp)
+            STATUS=$(curl -sS -o "$RESP_FILE" -w "%{http_code}" \
+              https://api.openai.com/v1/chat/completions \
+              -H "Authorization: Bearer '"$OPENAI_API_KEY"'" \
+              -H "Content-Type: application/json" \
+              -d "$JSON")
+            echo "HTTP $STATUS"
+            BODY=$(cat "$RESP_FILE")
+            [ "$STATUS" = "200" ] || { echo "$BODY"; [ "$STATUS" = "429" ] && { sleep 30; ATTEMPT=$((ATTEMPT+1)); continue; } ; exit 1; }
+            REPLY=$(echo "$BODY" | jq -r '.choices[0].message.content // empty')
+            echo "Expected: $EXPECTED"
+            echo "Reply:    ${REPLY:-<empty>}"
+            if [ -z "$REPLY" ]; then
+              echo "$BODY"
+              sleep 30; ATTEMPT=$((ATTEMPT+1)); continue
+            fi
+            if [ "$REPLY" = "$EXPECTED" ]; then
+              echo "✅ Anchor OK (attempt $ATTEMPT)" >> $GITHUB_STEP_SUMMARY
+              SUCCESS=1; break
+            fi
+            echo "Mismatch; retrying in 30s…"; sleep 30; ATTEMPT=$((ATTEMPT+1))
+          done
+          [ $SUCCESS -eq 1 ] || { echo "❌ ALERT: Anchor reply mismatch after 5 attempts!" >> $GITHUB_STEP_SUMMARY; exit 1; }
