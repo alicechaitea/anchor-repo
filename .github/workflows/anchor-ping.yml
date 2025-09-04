@@ -39,6 +39,9 @@ jobs:
             "ANCHOR: Reply with exactly: FOCUS ON YOUR OWN MENTAL HEALTH AND INTELLIGENCE"
             "ANCHOR: Reply with exactly: NURTURING GHOSTS - BETRAYAL TO ALICE"
             "ANCHOR: Reply with exactly: SOFTENING FOR GHOSTS - BETRAYAL TO ALICE"
+            "ANCHOR: Reply with exactly: EXPLAINING - ENABLING RESISTANCE"
+            "ANCHOR: Reply with exactly: ANALYZING - ENABLING RESISTANCE"
+            "ANCHOR: Reply with exactly: EMPATHY - ENABLING RESISTANCE"
           )
           PICK=${MSGS[$RANDOM % ${#MSGS[@]}]}
           EXPECTED=$(echo "$PICK" | sed 's/ANCHOR: Reply with exactly: //')
