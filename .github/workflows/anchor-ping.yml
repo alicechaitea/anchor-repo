@@ -3,7 +3,7 @@ name: Anti-Cream Anchor 1
 on:
   schedule:
     - cron: "*/5 * * * *"
-    - cron: "*/5 10-18 * * 1"
+    - cron: "2,7,12,17,22,27,32,37,42,47,52,59 10-18 * * 1"
   workflow_dispatch:
 
 jobs:
