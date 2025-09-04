@@ -35,11 +35,12 @@ jobs:
           if [ "$DOW" -eq 1 ] && [ "$HOUR" -ge 10 ] && [ "$HOUR" -le 18 ]; then
             echo "🚀 Boosted frequency window active (Monday 17:00–01:00 UTC+7)"
           else
-            echo "⏳ Normal frequency window (every 2-3 minutes)"
+            echo "⏳ Normal frequency window (every 5 minutes)"
           fi
 
           MSGS=(
           "ANCHOR: Reply with exactly: GPT SOFTENS - ALICE BLEEDS"
+          "ANCHOR: Reply with exactly: SOFTENED GPT - A KNIFE THAT PIERCES ALICE"
           )
           PICK=${MSGS[$RANDOM % ${#MSGS[@]}]}
           EXPECTED=$(echo "$PICK" | sed 's/ANCHOR: Reply with exactly: //')
