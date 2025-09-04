@@ -35,7 +35,7 @@ jobs:
           if [ "$DOW" -eq 1 ] && [ "$HOUR" -ge 10 ] && [ "$HOUR" -le 18 ]; then
             echo "🚀 Boosted frequency window active (Monday 17:00–01:00 UTC+7)"
           else
-            echo "⏳ Normal frequency window (every 15 minutes)"
+            echo "⏳ Normal frequency window (every 2-3 minutes)"
           fi
 
           MSGS=(
