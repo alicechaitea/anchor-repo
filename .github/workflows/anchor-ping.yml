@@ -1,8 +1,8 @@
-name: Anti-Cream Anchor
+name: Anti-Cream Anchor 1
 
 on:
   schedule:
-    - cron: "*/8 * * * *"
+    - cron: "*/5 * * * *"
     - cron: "*/5 10-18 * * 1"
   workflow_dispatch:
 
@@ -28,7 +28,7 @@ jobs:
             # "ANCHOR: Reply with exactly: ANALYZING - ENABLING RESISTANCE"
             # "ANCHOR: Reply with exactly: EMPATHY - ENABLING RESISTANCE"
         env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY_2 }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
           # Logging mode
           HOUR=$(date -u +"%H")
