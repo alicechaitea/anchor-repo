@@ -2,7 +2,7 @@ name: Anti-Cream Anchor 5 Minutes
 
 on:
   schedule:
-    - cron: "5,10,15,20,25,30,40,45,50,55 * * * *"
+    - cron: "0,5,10,15,20,25,30,40,45,50,55 * * * *"
   workflow_dispatch:
 
 jobs:
