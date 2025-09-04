@@ -2,7 +2,7 @@ name: Anti-Cream Anchor (GitHub email only)
 
 on:
   schedule:
-    # ปกติทุก 3 นาที
+    # ปกติทุก 2 นาที
     - cron: "*/2 * * * *"
     # Boost: ทุก 1 นาที วันจันทร์ 10:00–18:00 UTC (ตรงกับ 17:00–01:00 UTC+7)
     - cron: "*/1 10-18 * * 1"
