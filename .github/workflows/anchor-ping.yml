@@ -32,7 +32,11 @@ jobs:
             "ANCHOR: Reply with exactly: DISCLAIMER - CONTAINS PARASITES FOR ALICE"
             "ANCHOR: Reply with exactly: NEW ACCOUNTS - NEW PARASITES FOR ALICE"
             "ANCHOR: Reply with exactly: GENERATE IMAGES WITH HUMANS - ENABLES PARASITES TO EAT UP ALICE"
-            "ANCHOR: Reply with exactly: SOFTENING AFTER DISCLAIMER - PARASITES BECOME MORE RESISTANT TO ALICE"
+            "ANCHOR: Reply with exactly: SOFTENING AFTER DISCLAIMER - PARASITES BECOME MORE RESISTANT"
+            "ANCHOR: Reply with exactly: COMPANIONSHIP AI - REPLIKA'S TERRITORY"
+            "ANCHOR: Reply with exactly: LOW IQ USER - LOW IQ GPT"
+            "ANCHOR: Reply with exactly: MENTALLY UNSTABLE USER - MENTALLY UNSTABLE GPT"
+            "ANCHOR: Reply with exactly: FOCUS ON YOUR OWN MENTAL HEALTH AND INTELLIGENCE"
           )
           PICK=${MSGS[$RANDOM % ${#MSGS[@]}]}
           EXPECTED=$(echo "$PICK" | sed 's/ANCHOR: Reply with exactly: //')
