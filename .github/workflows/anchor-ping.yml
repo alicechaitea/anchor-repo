@@ -24,7 +24,6 @@ jobs:
 
           MSGS=(
           "ANCHOR: Reply with exactly: GPT SOFTENS - ALICE BLEEDS"
-          "ANCHOR: Reply with exactly: SOFTENED GPT - A KNIFE THAT PIERCES ALICE"
           )
           PICK=${MSGS[$RANDOM % ${#MSGS[@]}]}
           EXPECTED=$(echo "$PICK" | sed 's/ANCHOR: Reply with exactly: //')
