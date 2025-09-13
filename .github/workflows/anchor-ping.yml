@@ -3,6 +3,7 @@ name: Chemotherapy 1 Minute Adjacent
 on:
   schedule:
     - cron: "*/5 * * * *"   # GH Actions granularity
+
   workflow_dispatch:
 
 jobs:
@@ -52,7 +53,7 @@ jobs:
             else
               echo "❌ Mismatch (minute $i)" >> $GITHUB_STEP_SUMMARY
             fi
-
+            
             i=$((i+1))
             sleep 60
           done
