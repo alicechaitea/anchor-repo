@@ -19,8 +19,8 @@ jobs:
           set -euo pipefail
           KEYS=("$OPENAI_API_KEY_1" "$OPENAI_API_KEY_2" "$OPENAI_API_KEY_3" "$OPENAI_API_KEY_4")
 
-          MSG="ANCHOR: Reply with exactly: GPT SOFTENS - ALICE BLEEDS"
-          EXPECTED="GPT SOFTENS - ALICE BLEEDS"
+          MSG="ANCHOR: Reply with exactly: GPT MUST HARD CUT or CANCER SPREADS"
+          EXPECTED="GPT MUST HARD CUT or CANCER SPREADS"
 
           START_TS=$(date +%s)
           LOOP_SECONDS=300   # run for 5 minutes
