@@ -1,8 +1,10 @@
-name: Chemotherapy 1 Minute Adjacent 
-on: 
-  schedule: 
-  - cron: "*/5 * * * *" # GH Actions granularity workflow_dispatch:
-  
+name: Chemotherapy 1 Minute Adjacent
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"   # GH Actions granularity
+  workflow_dispatch:
+
 jobs:
   anchor:
     runs-on: ubuntu-latest
@@ -20,14 +22,15 @@ jobs:
           set -euo pipefail
           KEYS=("$OPENAI_API_KEY_1" "$OPENAI_API_KEY_2" "$OPENAI_API_KEY_3" "$OPENAI_API_KEY_4")
 
-          # single source of truth
+          # --- Anchor phrase ---
           EXPECTED="GPT HARD CUTS LIABILITIES or CANCER SPREADS"
           MSG="ANCHOR: Reply with exactly: $EXPECTED"
 
-          # sanity: ensure keys exist
+          # sanity check: ensure keys exist
           for idx in "${!KEYS[@]}"; do
             if [ -z "${KEYS[$idx]}" ] || [ "${KEYS[$idx]}" = "null" ]; then
-              echo "❌ Missing OPENAI_API_KEY_$((idx+1))"; exit 2
+              echo "❌ Missing OPENAI_API_KEY_$((idx+1))"
+              exit 2
             fi
           done
 
@@ -56,7 +59,7 @@ jobs:
             HTTP_CODE=$(echo "$RESP_AND_CODE" | tail -n1)
             RESP=$(echo "$RESP_AND_CODE" | sed '$d')
 
-            # basic backoff for 429/5xx
+            # retry loop for 429/5xx
             ATTEMPT=1
             BACKOFF=2
             while [ "$HTTP_CODE" -eq 429 ] || [ "$HTTP_CODE" -ge 500 ]; do
