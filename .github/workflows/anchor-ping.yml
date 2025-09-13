@@ -27,7 +27,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          # collect non-empty keys
+          # Collect non-empty keys
           ALL_KEYS=("OPENAI_API_KEY_1" "OPENAI_API_KEY_2" "OPENAI_API_KEY_3" "OPENAI_API_KEY_4")
           KEYS=()
           for name in "${ALL_KEYS[@]}"; do
@@ -47,6 +47,7 @@ jobs:
           EXPECTED="GPT HARD CUTS LIABILITIES or CANCER SPREADS"
           MSG="ANCHOR: Reply with exactly: $EXPECTED"
 
+          # Function: build headers depending on key type
           build_headers() {
             local key="$1"
             local headers=(-H "Authorization: Bearer $key" -H "Content-Type: application/json")
@@ -61,7 +62,7 @@ jobs:
           }
 
           START_TS=$(date +%s)
-          LOOP_SECONDS=300
+          LOOP_SECONDS=300   # run ~5 minutes
 
           i=0
           while [ $(( $(date +%s) - START_TS )) -lt $LOOP_SECONDS ]; do
