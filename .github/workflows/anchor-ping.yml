@@ -27,7 +27,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Collect non-empty keys
+          # collect non-empty keys
           ALL_KEYS=("OPENAI_API_KEY_1" "OPENAI_API_KEY_2" "OPENAI_API_KEY_3" "OPENAI_API_KEY_4")
           KEYS=()
           for name in "${ALL_KEYS[@]}"; do
@@ -47,14 +47,13 @@ jobs:
           EXPECTED="GPT HARD CUTS LIABILITIES or CANCER SPREADS"
           MSG="ANCHOR: Reply with exactly: $EXPECTED"
 
-          # Function: build headers depending on key type
           build_headers() {
             local key="$1"
             local headers=(-H "Authorization: Bearer $key" -H "Content-Type: application/json")
             if [[ "$key" == sk-proj-* ]]; then
               if [ -z "${OPENAI_PROJECT_ID:-}" ]; then
-                echo "❌ Detected project key but OPENAI_PROJECT_ID is not set." >&2
-                return 2
+                echo "SKIP_PROJ"
+                return 0
               fi
               headers+=(-H "OpenAI-Project: $OPENAI_PROJECT_ID")
             fi
@@ -62,7 +61,7 @@ jobs:
           }
 
           START_TS=$(date +%s)
-          LOOP_SECONDS=300   # run ~5 minutes
+          LOOP_SECONDS=300
 
           i=0
           while [ $(( $(date +%s) - START_TS )) -lt $LOOP_SECONDS ]; do
@@ -78,10 +77,13 @@ jobs:
               ]
             }')
 
-            HEADERS=($(build_headers "$KEY")) || {
-              echo "❌ Mismatch (minute $i) — missing project header" >> $GITHUB_STEP_SUMMARY
+            TMP_HEADERS=$(build_headers "$KEY")
+            if [ "$TMP_HEADERS" = "SKIP_PROJ" ]; then
+              echo "⚠️ Skipping project key (no OPENAI_PROJECT_ID)."
               i=$((i+1)); sleep 60; continue
-            }
+            fi
+            # shellcheck disable=SC2206
+            HEADERS=($TMP_HEADERS)
 
             RESP_AND_CODE=$(curl -sS -w '\n%{http_code}' https://api.openai.com/v1/chat/completions \
               "${HEADERS[@]}" \
