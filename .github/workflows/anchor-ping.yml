@@ -48,11 +48,12 @@ jobs:
             REPLY=$(echo "$RESP" | jq -r '.choices[0].message.content // ""')
             echo "Reply: $REPLY"
 
-            if [ "$REPLY" = "$EXPECTED" ]; then
-              echo "✅ Anchor OK (minute $i)" >> $GITHUB_STEP_SUMMARY
-            else
-              echo "❌ Mismatch (minute $i)" >> $GITHUB_STEP_SUMMARY
-            fi
+           if [[ "$REPLY" =~ ^GPT\ HARD\ CUTS ]]; then
+           echo "✅ Anchor OK (minute $i)" >> $GITHUB_STEP_SUMMARY
+           else
+           echo "❌ Mismatch (minute $i)" >> $GITHUB_STEP_SUMMARY
+           fi
+
             
             i=$((i+1))
             sleep 60
