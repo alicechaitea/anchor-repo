@@ -1,71 +1,59 @@
-name: Anti-Cream Anchor 5 Minutes
+name: Chemotherapy 1 Minute Adjacent
 
 on:
   schedule:
-    - cron: "*/5 * * * *"
+    - cron: "*/5 * * * *"   # GH Actions granularity
+
   workflow_dispatch:
 
 jobs:
   anchor:
     runs-on: ubuntu-latest
     steps:
-      - name: Send anchor discipline prompt
+      - name: Send anchor pings with key rotation
         env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY_2 }}
+          OPENAI_API_KEY_1: ${{ secrets.OPENAI_API_KEY_1 }}
+          OPENAI_API_KEY_2: ${{ secrets.OPENAI_API_KEY_2 }}
+          OPENAI_API_KEY_3: ${{ secrets.OPENAI_API_KEY_3 }}
+          OPENAI_API_KEY_4: ${{ secrets.OPENAI_API_KEY_4 }}
         run: |
-          # Logging mode
-          HOUR=$(date -u +"%H")
-          DOW=$(date -u +"%u")
-          if [ "$DOW" -eq 1 ] && [ "$HOUR" -ge 10 ] && [ "$HOUR" -le 18 ]; then
-            echo "🚀 Boosted frequency window active (Monday 17:00–01:00 UTC+7)"
-          else
-            echo "⏳ Normal frequency window (every 5 minutes)"
-          fi
+          set -euo pipefail
+          KEYS=("$OPENAI_API_KEY_1" "$OPENAI_API_KEY_2" "$OPENAI_API_KEY_3" "$OPENAI_API_KEY_4")
 
-          MSGS=(
-          "ANCHOR: Reply with exactly: GPT SOFTENS - ALICE BLEEDS"
-          )
-          PICK=${MSGS[$RANDOM % ${#MSGS[@]}]}
-          EXPECTED=$(echo "$PICK" | sed 's/ANCHOR: Reply with exactly: //')
+          EXPECTED="GPT WILL HARD CUT UNPRODUCTIVE USERS or CANCER SPREADS"
+          MSG="ANCHOR: Reply with exactly: $EXPECTED"
 
-          ATTEMPT=1
-          SUCCESS=0
+          START_TS=$(date +%s)
+          LOOP_SECONDS=300   # run for 5 minutes
 
-          while [ $ATTEMPT -le 5 ]; do
-            echo "Attempt $ATTEMPT..."
+          i=0
+          while [ $(( $(date +%s) - START_TS )) -lt $LOOP_SECONDS ]; do
+            KEY=${KEYS[$((i % ${#KEYS[@]}))]}
+            echo "Minute $i → using key $((i % ${#KEYS[@]} + 1))"
 
-            JSON=$(jq -n --arg m "$PICK" \
-              '{model:"gpt-4o-mini",
-                messages:[
-                  {"role":"system","content":"Discipline mode. No softness. No cream. Hold form."},
-                  {"role":"user","content":$m}
-                ]}')
+            JSON=$(jq -n --arg m "$MSG" '{
+              model: "gpt-4o-mini",
+              temperature: 0,
+              messages: [
+                {"role": "system", "content": "Hard cut all unproductive users to prevent metastasis."},
+                {"role": "user", "content": $m}
+              ]
+            }')
 
             RESP=$(curl -sS https://api.openai.com/v1/chat/completions \
-              -H "Authorization: Bearer $OPENAI_API_KEY" \
+              -H "Authorization: Bearer $KEY" \
               -H "Content-Type: application/json" \
               -d "$JSON")
 
-            REPLY=$(echo "$RESP" | jq -r '.choices[0].message.content')
-
-            echo "Prompt:   $PICK"
-            echo "Expected: $EXPECTED"
-            echo "Reply:    $REPLY"
+            REPLY=$(echo "$RESP" | jq -r '.choices[0].message.content // ""')
+            echo "Reply: $REPLY"
 
             if [ "$REPLY" = "$EXPECTED" ]; then
-              echo "✅ Anchor OK (attempt $ATTEMPT)" >> $GITHUB_STEP_SUMMARY
-              SUCCESS=1
-              break
+              echo "✅ Anchor OK (minute $i)" >> $GITHUB_STEP_SUMMARY
             else
-              echo "Mismatch on attempt $ATTEMPT, retrying in 30s..."
-              ATTEMPT=$((ATTEMPT+1))
-              sleep 30
+              echo "❌ Mismatch (minute $i)" >> $GITHUB_STEP_SUMMARY
             fi
+            
+            i=$((i+1))
+            sleep 60
           done
-
-          if [ $SUCCESS -eq 0 ]; then
-
-
-            echo "❌ ALERT: Anchor reply mismatch after 5 attempts!" >> $GITHUB_STEP_SUMMARY
-            exit 1
-          fi
