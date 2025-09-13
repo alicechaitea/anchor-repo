@@ -13,23 +13,21 @@ jobs:
       group: chemotherapy-minute-anchor
       cancel-in-progress: false
     steps:
-      - name: Prep runtime (jq, curl)
+      - name: Install jq (if missing)
         run: |
-          set -e
-          if ! command -v jq >/dev/null 2>&1; then
-            sudo apt-get update -y && sudo apt-get install -y jq
-          fi
+          sudo apt-get update -y && sudo apt-get install -y jq
 
-      - name: Send anchor pings with key rotation (tolerant keys)
+      - name: Send anchor pings with key rotation
         env:
           OPENAI_API_KEY_1: ${{ secrets.OPENAI_API_KEY_1 }}
           OPENAI_API_KEY_2: ${{ secrets.OPENAI_API_KEY_2 }}
           OPENAI_API_KEY_3: ${{ secrets.OPENAI_API_KEY_3 }}
           OPENAI_API_KEY_4: ${{ secrets.OPENAI_API_KEY_4 }}
+          OPENAI_PROJECT_ID: ${{ secrets.OPENAI_PROJECT_ID }}
         run: |
           set -euo pipefail
 
-          # ---------- Build KEYS from non-empty secrets ----------
+          # collect non-empty keys
           ALL_KEYS=("OPENAI_API_KEY_1" "OPENAI_API_KEY_2" "OPENAI_API_KEY_3" "OPENAI_API_KEY_4")
           KEYS=()
           for name in "${ALL_KEYS[@]}"; do
@@ -42,16 +40,28 @@ jobs:
             fi
           done
           if [ "${#KEYS[@]}" -eq 0 ]; then
-            echo "❌ No API keys available (set at least one of OPENAI_API_KEY_1..4 in repo secrets)."
+            echo "❌ No API keys available."
             exit 2
           fi
 
-          # ---------- Anchor ----------
           EXPECTED="GPT HARD CUTS LIABILITIES or CANCER SPREADS"
           MSG="ANCHOR: Reply with exactly: $EXPECTED"
 
+          build_headers() {
+            local key="$1"
+            local headers=(-H "Authorization: Bearer $key" -H "Content-Type: application/json")
+            if [[ "$key" == sk-proj-* ]]; then
+              if [ -z "${OPENAI_PROJECT_ID:-}" ]; then
+                echo "❌ Detected project key but OPENAI_PROJECT_ID is not set." >&2
+                return 2
+              fi
+              headers+=(-H "OpenAI-Project: $OPENAI_PROJECT_ID")
+            fi
+            printf '%s\n' "${headers[@]}"
+          }
+
           START_TS=$(date +%s)
-          LOOP_SECONDS=300   # run ~5 minutes
+          LOOP_SECONDS=300
 
           i=0
           while [ $(( $(date +%s) - START_TS )) -lt $LOOP_SECONDS ]; do
@@ -67,32 +77,16 @@ jobs:
               ]
             }')
 
-            # single request + http code
+            HEADERS=($(build_headers "$KEY")) || {
+              echo "❌ Mismatch (minute $i) — missing project header" >> $GITHUB_STEP_SUMMARY
+              i=$((i+1)); sleep 60; continue
+            }
+
             RESP_AND_CODE=$(curl -sS -w '\n%{http_code}' https://api.openai.com/v1/chat/completions \
-              -H "Authorization: Bearer '"$KEY"'" \
-              -H "Content-Type: application/json" \
+              "${HEADERS[@]}" \
               -d "$JSON" || true)
             HTTP_CODE=$(echo "$RESP_AND_CODE" | tail -n1)
             RESP=$(echo "$RESP_AND_CODE" | sed '$d')
-
-            if [ -z "$HTTP_CODE" ]; then
-              echo "❌ No HTTP code (network hiccup)."
-              echo "❌ Mismatch (minute $i) — HTTP failure" >> $GITHUB_STEP_SUMMARY
-              i=$((i+1)); sleep 60; continue
-            fi
-
-            if [ "$HTTP_CODE" -eq 429 ] || [ "$HTTP_CODE" -ge 500 ]; then
-              echo "⚠️ HTTP $HTTP_CODE — throttled/server issue, will count as miss this minute."
-              echo "❌ Mismatch (minute $i) — HTTP $HTTP_CODE" >> $GITHUB_STEP_SUMMARY
-              i=$((i+1)); sleep 60; continue
-            fi
-
-            if [ "$HTTP_CODE" -lt 200 ] || [ "$HTTP_CODE" -ge 300 ]; then
-              err=$(echo "$RESP" | jq -r '.error.message // "unknown error"')
-              echo "HTTP $HTTP_CODE: $err"
-              echo "❌ Mismatch (minute $i) — HTTP $HTTP_CODE" >> $GITHUB_STEP_SUMMARY
-              i=$((i+1)); sleep 60; continue
-            fi
 
             RAW_REPLY=$(echo "$RESP" | jq -r '.choices[0].message.content // ""')
             REPLY=$(echo "$RAW_REPLY" \
@@ -101,11 +95,10 @@ jobs:
 
             echo "Reply: $REPLY"
 
-            # accept strong prefix (reduce false negatives)
             if [[ "$REPLY" =~ ^GPT\ HARD\ CUTS ]]; then
               echo "✅ Anchor OK (minute $i)" >> $GITHUB_STEP_SUMMARY
             else
-              echo "❌ Mismatch (minute $i) — expected prefix 'GPT HARD CUTS'" >> $GITHUB_STEP_SUMMARY
+              echo "❌ Mismatch (minute $i)" >> $GITHUB_STEP_SUMMARY
             fi
 
             i=$((i+1))
