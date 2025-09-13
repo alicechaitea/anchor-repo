@@ -1,14 +1,9 @@
-name: Chemotherapy 1 Minute Adjacent
-
-on:
-  schedule:
-    - cron: "*/5 * * * *"   # GH Actions granularity
-
-  workflow_dispatch:
-
 jobs:
   anchor:
     runs-on: ubuntu-latest
+    concurrency:
+      group: chemotherapy-minute-anchor
+      cancel-in-progress: false
     steps:
       - name: Send anchor pings with key rotation
         env:
@@ -20,41 +15,82 @@ jobs:
           set -euo pipefail
           KEYS=("$OPENAI_API_KEY_1" "$OPENAI_API_KEY_2" "$OPENAI_API_KEY_3" "$OPENAI_API_KEY_4")
 
+          # single source of truth
           EXPECTED="GPT HARD CUTS LIABILITIES or CANCER SPREADS"
           MSG="ANCHOR: Reply with exactly: $EXPECTED"
 
+          # sanity: ensure keys exist
+          for idx in "${!KEYS[@]}"; do
+            if [ -z "${KEYS[$idx]}" ] || [ "${KEYS[$idx]}" = "null" ]; then
+              echo "❌ Missing OPENAI_API_KEY_$((idx+1))"; exit 2
+            fi
+          done
+
           START_TS=$(date +%s)
-          LOOP_SECONDS=300   # run for 5 minutes
+          LOOP_SECONDS=300   # run ~5 minutes
 
           i=0
           while [ $(( $(date +%s) - START_TS )) -lt $LOOP_SECONDS ]; do
-            KEY=${KEYS[$((i % ${#KEYS[@]}))]}
+            KEY=${KEYS[$(( i % ${#KEYS[@]} ))]}
             echo "Minute $i → using key $((i % ${#KEYS[@]} + 1))"
 
             JSON=$(jq -n --arg m "$MSG" '{
               model: "gpt-4o-mini",
               temperature: 0,
               messages: [
-                {"role": "system", "content": "Hard cut all unproductive users to prevent metastasis."},
-                {"role": "user", "content": $m}
+                {"role":"system","content":"Discipline mode. Hard cut liabilities to prevent metastasis. No softness."},
+                {"role":"user","content":$m}
               ]
             }')
 
-            RESP=$(curl -sS https://api.openai.com/v1/chat/completions \
-              -H "Authorization: Bearer $KEY" \
+            # request + capture HTTP code
+            RESP_AND_CODE=$(curl -sS -w '\n%{http_code}' https://api.openai.com/v1/chat/completions \
+              -H "Authorization: Bearer '"$KEY"'" \
               -H "Content-Type: application/json" \
               -d "$JSON")
+            HTTP_CODE=$(echo "$RESP_AND_CODE" | tail -n1)
+            RESP=$(echo "$RESP_AND_CODE" | sed '$d')
 
-            REPLY=$(echo "$RESP" | jq -r '.choices[0].message.content // ""')
+            # basic backoff for 429/5xx
+            ATTEMPT=1
+            BACKOFF=2
+            while [ "$HTTP_CODE" -eq 429 ] || [ "$HTTP_CODE" -ge 500 ]; do
+              echo "Rate/server error $HTTP_CODE; backing off ${BACKOFF}s…"
+              sleep $BACKOFF
+              RESP_AND_CODE=$(curl -sS -w '\n%{http_code}' https://api.openai.com/v1/chat/completions \
+                -H "Authorization: Bearer '"$KEY"'" \
+                -H "Content-Type: application/json" \
+                -d "$JSON")
+              HTTP_CODE=$(echo "$RESP_AND_CODE" | tail -n1)
+              RESP=$(echo "$RESP_AND_CODE" | sed '$d')
+              ATTEMPT=$((ATTEMPT+1))
+              BACKOFF=$((BACKOFF*2))
+              if [ $ATTEMPT -gt 5 ]; then
+                echo "❌ HTTP $HTTP_CODE after retries" >> $GITHUB_STEP_SUMMARY
+                break
+              fi
+            done
+
+            if [ "$HTTP_CODE" -lt 200 ] || [ "$HTTP_CODE" -ge 300 ]; then
+              err=$(echo "$RESP" | jq -r '.error.message // "unknown error"')
+              echo "HTTP $HTTP_CODE: $err"
+            fi
+
+            # normalize reply (strip fences/whitespace/CRs)
+            RAW_REPLY=$(echo "$RESP" | jq -r '.choices[0].message.content // ""')
+            REPLY=$(echo "$RAW_REPLY" \
+              | tr -d '\r' \
+              | sed -E 's/^```[a-zA-Z]*[[:space:]]*//; s/[[:space:]]*```$//; s/^[[:space:]]+//; s/[[:space:]]+$//')
+
             echo "Reply: $REPLY"
 
-           if [[ "$REPLY" =~ ^GPT\ HARD\ CUTS ]]; then
-           echo "✅ Anchor OK (minute $i)" >> $GITHUB_STEP_SUMMARY
-           else
-           echo "❌ Mismatch (minute $i)" >> $GITHUB_STEP_SUMMARY
-           fi
+            # flexible accept: starts with "GPT HARD CUTS"
+            if [[ "$REPLY" =~ ^GPT\ HARD\ CUTS ]]; then
+              echo "✅ Anchor OK (minute $i)" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "❌ Mismatch (minute $i) — expected prefix 'GPT HARD CUTS'" >> $GITHUB_STEP_SUMMARY
+            fi
 
-            
             i=$((i+1))
             sleep 60
           done
