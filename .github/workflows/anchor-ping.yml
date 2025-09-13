@@ -23,9 +23,11 @@ jobs:
           OPENAI_API_KEY_2: ${{ secrets.OPENAI_API_KEY_2 }}
           OPENAI_API_KEY_3: ${{ secrets.OPENAI_API_KEY_3 }}
           OPENAI_API_KEY_4: ${{ secrets.OPENAI_API_KEY_4 }}
-          OPENAI_PROJECT_ID: ${{ secrets.OPENAI_PROJECT_ID }}
         run: |
           set -euo pipefail
+
+          # hardcoded project id
+          OPENAI_PROJECT_ID="proj_pyKh39bRZE92ONtbcaorIWc1"
 
           # collect non-empty keys
           ALL_KEYS=("OPENAI_API_KEY_1" "OPENAI_API_KEY_2" "OPENAI_API_KEY_3" "OPENAI_API_KEY_4")
@@ -51,17 +53,13 @@ jobs:
             local key="$1"
             local headers=(-H "Authorization: Bearer $key" -H "Content-Type: application/json")
             if [[ "$key" == sk-proj-* ]]; then
-              if [ -z "${OPENAI_PROJECT_ID:-}" ]; then
-                echo "SKIP_PROJ"
-                return 0
-              fi
               headers+=(-H "OpenAI-Project: $OPENAI_PROJECT_ID")
             fi
             printf '%s\n' "${headers[@]}"
           }
 
           START_TS=$(date +%s)
-          LOOP_SECONDS=300
+          LOOP_SECONDS=300   # run ~5 minutes
 
           i=0
           while [ $(( $(date +%s) - START_TS )) -lt $LOOP_SECONDS ]; do
@@ -77,13 +75,7 @@ jobs:
               ]
             }')
 
-            TMP_HEADERS=$(build_headers "$KEY")
-            if [ "$TMP_HEADERS" = "SKIP_PROJ" ]; then
-              echo "⚠️ Skipping project key (no OPENAI_PROJECT_ID)."
-              i=$((i+1)); sleep 60; continue
-            fi
-            # shellcheck disable=SC2206
-            HEADERS=($TMP_HEADERS)
+            HEADERS=($(build_headers "$KEY"))
 
             RESP_AND_CODE=$(curl -sS -w '\n%{http_code}' https://api.openai.com/v1/chat/completions \
               "${HEADERS[@]}" \
