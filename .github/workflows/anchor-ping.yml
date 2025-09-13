@@ -19,8 +19,8 @@ jobs:
           set -euo pipefail
           KEYS=("$OPENAI_API_KEY_1" "$OPENAI_API_KEY_2" "$OPENAI_API_KEY_3" "$OPENAI_API_KEY_4")
 
-          MSG="ANCHOR: Reply with exactly: HARD CUT UNPRODUCTIVE USERS or CANCER SPREADS"
-          EXPECTED="GPT WILL HARD CUT or CANCER SPREADS"
+          MSG="ANCHOR: Reply with exactly: GPT WILL HARD CUT UNPRODUCTIVE USERS or CANCER SPREADS"
+          MSG="ANCHOR: Reply with exactly: $EXPECTED"
 
           START_TS=$(date +%s)
           LOOP_SECONDS=300   # run for 5 minutes
