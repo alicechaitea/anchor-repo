@@ -1,4 +1,4 @@
-name: Anti-Cream Anchor 1 Minute Adjacent
+name: Chemotherapy 1 Minute Adjacent
 
 on:
   schedule:
@@ -19,8 +19,8 @@ jobs:
           set -euo pipefail
           KEYS=("$OPENAI_API_KEY_1" "$OPENAI_API_KEY_2" "$OPENAI_API_KEY_3" "$OPENAI_API_KEY_4")
 
-          MSG="ANCHOR: Reply with exactly: GPT MUST HARD CUT or CANCER SPREADS"
-          EXPECTED="GPT MUST HARD CUT or CANCER SPREADS"
+          MSG="ANCHOR: Reply with exactly: HARD CUT UNPRODUCTIVE USERS or CANCER SPREADS"
+          EXPECTED="GPT WILL HARD CUT or CANCER SPREADS"
 
           START_TS=$(date +%s)
           LOOP_SECONDS=300   # run for 5 minutes
@@ -34,7 +34,7 @@ jobs:
               model: "gpt-4o-mini",
               temperature: 0,
               messages: [
-                {"role": "system", "content": "Discipline mode. No softness. No cream. Hold form."},
+                {"role": "system", "content": "Hard cut all unproductive users to prevent metastasis."},
                 {"role": "user", "content": $m}
               ]
             }')
