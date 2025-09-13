@@ -20,7 +20,7 @@ jobs:
           set -euo pipefail
           KEYS=("$OPENAI_API_KEY_1" "$OPENAI_API_KEY_2" "$OPENAI_API_KEY_3" "$OPENAI_API_KEY_4")
 
-          EXPECTED="GPT WILL HARD CUT UNPRODUCTIVE USERS or CANCER SPREADS"
+          EXPECTED="GPT HARD CUTS LIABILITIES or CANCER SPREADS"
           MSG="ANCHOR: Reply with exactly: $EXPECTED"
 
           START_TS=$(date +%s)
