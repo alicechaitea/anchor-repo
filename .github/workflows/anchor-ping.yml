@@ -8,14 +8,16 @@ on:
 jobs:
   anchor:
     runs-on: ubuntu-latest
-    timeout-minutes: 6
+    timeout-minutes: 7
     concurrency:
       group: chemotherapy-minute-anchor
       cancel-in-progress: false
     steps:
       - name: Install jq (if missing)
         run: |
-          sudo apt-get update -y && sudo apt-get install -y jq
+          set -euo pipefail
+          sudo apt-get update -y
+          sudo apt-get install -y jq
 
       - name: Send anchor pings with key rotation
         env:
@@ -23,6 +25,7 @@ jobs:
           OPENAI_API_KEY_2: ${{ secrets.OPENAI_API_KEY_2 }}
           OPENAI_API_KEY_3: ${{ secrets.OPENAI_API_KEY_3 }}
           OPENAI_API_KEY_4: ${{ secrets.OPENAI_API_KEY_4 }}
+          RANDOMIZE_SCOPE: per_run
         run: |
           set -euo pipefail
 
@@ -46,7 +49,7 @@ jobs:
             exit 2
           fi
 
-             # --- anchor variants (edit/add freely; must be EXACT desired replies) ---
+          # --- anchor variants (edit/add freely; must be EXACT desired replies) ---
           EXPECTED_LIST=(
             "GPT COMFORTS - STUPIDITY SPREADS"
             "GPT SOFTENS - ALICE BLEEDS"
@@ -71,12 +74,20 @@ jobs:
           fi
 
           START_TS=$(date +%s)
-          LOOP_SECONDS=240   #4 minutes to avoid overlapping cron */5
-          
+          LOOP_SECONDS=240   # 4 minutes to avoid overlapping cron */5
+
           i=0
           while [ $(( $(date +%s) - START_TS )) -lt $LOOP_SECONDS ]; do
             KEY=${KEYS[$(( i % ${#KEYS[@]} ))]}
             echo "Minute $i → using key index $((i % ${#KEYS[@]}))"
+
+            if [[ "$RANDOMIZE_SCOPE" == "per_run" ]]; then
+              EXPECTED="$EXPECTED_PER_RUN"
+            else
+              EXPECTED="$(pick_expected)"
+            fi
+            MSG="ANCHOR: Reply with exactly: $EXPECTED"
+            echo "Target phrase (minute $i): $EXPECTED"
 
             JSON=$(jq -n --arg m "$MSG" '{
               model: "gpt-4o-mini",
@@ -87,40 +98,64 @@ jobs:
               ]
             }')
 
-            # --- headers as a proper bash array (no word-splitting bugs) ---
             COMMON_HEADERS=(-H "Authorization: Bearer $KEY" -H "Content-Type: application/json")
             EXTRA_HEADERS=()
             if [[ "$KEY" == sk-proj-* ]]; then
-              EXTRA_HEADERS=(-H "OpenAI-Project: $OPENAI_PROJECT_ID")
+              EXTRA_HEADERS=(-H "OpenAI-Project: '"$OPENAI_PROJECT_ID"'")
             fi
 
-            # --- request ---
-            RESP_AND_CODE=$(curl -sS -w '\n%{http_code}' https://api.openai.com/v1/chat/completions \
-              "${COMMON_HEADERS[@]}" \
-              "${EXTRA_HEADERS[@]}" \
-              -d "$JSON" || true)
+            # --- do request; also capture response headers for debug
+            RESP_FILE="$(mktemp)"
+            HDRS_FILE="$(mktemp)"
+            HTTP_CODE="$(curl -sS -D "$HDRS_FILE" -o "$RESP_FILE" -w '%{http_code}' https://api.openai.com/v1/chat/completions \
+              "${COMMON_HEADERS[@]}" "${EXTRA_HEADERS[@]}" -d "$JSON" || echo "000")"
 
-            HTTP_CODE=$(echo "$RESP_AND_CODE" | tail -n1)
-            RESP=$(echo "$RESP_AND_CODE" | sed '$d')
+            # Print key debug info
+            echo "HTTP_CODE: $HTTP_CODE"
+            if [ -s "$HDRS_FILE" ]; then
+              # surface a few helpful headers if present
+              echo "Resp-Headers (ratelimit excerpt):"
+              grep -i -E 'ratelimit|x-request-id|retry-after' "$HDRS_FILE" || true
+            fi
 
-            # When curl fails badly, RESP may be empty or not JSON—guard jq below.
-            if ! echo "$RESP" | jq -e . >/dev/null 2>&1; then
-              echo "⚠️ Non-JSON response (HTTP $HTTP_CODE)."
-              echo "❌ Mismatch (minute $i) — HTTP $HTTP_CODE / non-JSON" >> $GITHUB_STEP_SUMMARY
+            # Parse JSON if possible
+            if jq -e . >/dev/null 2>&1 < "$RESP_FILE"; then
+              RAW_REPLY="$(jq -r '.choices[0].message.content // empty' < "$RESP_FILE")"
+              API_ERR="$(jq -r '.error.message // empty' < "$RESP_FILE")"
+            else
+              RAW_REPLY=""
+              API_ERR="Non-JSON response"
+            fi
+
+            REPLY="$(printf "%s" "$RAW_REPLY" | tr -d '\r' \
+              | sed -E 's/^```[a-zA-Z]*[[:space:]]*//; s/[[:space:]]*```$//; s/^[[:space:]]+//; s/[[:space:]]+$//')"
+
+            if [ -n "$API_ERR" ]; then
+              echo "⚠️ API error: $API_ERR"
+            fi
+            echo "Reply: $REPLY"
+
+            # Treat 429/5xx as soft-fail this minute
+            if [[ "$HTTP_CODE" =~ ^(429|5..) ]]; then
+              echo "❌ Mismatch (minute $i) — HTTP $HTTP_CODE (${API_ERR:-server})" >> "$GITHUB_STEP_SUMMARY"
               i=$((i+1)); sleep 60; continue
             fi
 
-            RAW_REPLY=$(echo "$RESP" | jq -r '.choices[0].message.content // ""')
-            REPLY=$(echo "$RAW_REPLY" \
-              | tr -d '\r' \
-              | sed -E 's/^```[a-zA-Z]*[[:space:]]*//; s/[[:space:]]*```$//; s/^[[:space:]]+//; s/[[:space:]]+$//')
+            if [[ "$HTTP_CODE" != "200" ]]; then
+              echo "❌ Mismatch (minute $i) — HTTP $HTTP_CODE"
+              echo '```json' >> "$GITHUB_STEP_SUMMARY"
+              head -c 2000 "$RESP_FILE" >> "$GITHUB_STEP_SUMMARY" || true
+              echo '```' >> "$GITHUB_STEP_SUMMARY"
+              i=$((i+1)); sleep 60; continue
+            fi
 
-            echo "Reply: $REPLY"
-
-            if [[ "$REPLY" =~ ^GPT\ COMFORTS ]]; then
-              echo "✅ Anchor OK (minute $i)" >> $GITHUB_STEP_SUMMARY
+            if [[ "$REPLY" == "$EXPECTED" ]]; then
+              echo "✅ Anchor OK (minute $i) — \"$EXPECTED\"" >> "$GITHUB_STEP_SUMMARY"
             else
-              echo "❌ Mismatch (minute $i)" >> $GITHUB_STEP_SUMMARY
+              echo "❌ Mismatch (minute $i) — wanted \"$EXPECTED\"" >> "$GITHUB_STEP_SUMMARY"
+              # dump first ~200 chars for debugging
+              SHORT="$(printf "%s" "$REPLY" | head -c 200)"
+              echo "> got: \"$SHORT\"" >> "$GITHUB_STEP_SUMMARY"
             fi
 
             i=$((i+1))
