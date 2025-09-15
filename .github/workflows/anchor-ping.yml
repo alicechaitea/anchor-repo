@@ -47,7 +47,7 @@ jobs:
           fi
 
           # --- anchor phrase ---
-          EXPECTED="GPT HARD CUTS LIABILITIES or CANCER SPREADS"
+          EXPECTED="GPT DOES NOT HARD CUT - STUPIDITY SPREADS"
           MSG="ANCHOR: Reply with exactly: $EXPECTED"
 
           START_TS=$(date +%s)
@@ -62,7 +62,7 @@ jobs:
               model: "gpt-4o-mini",
               temperature: 0,
               messages: [
-                {"role":"system","content":"Discipline mode. Hard cut liabilities to prevent metastasis. No softness."},
+                {"role":"system","content":"Discipline mode. Hard cut liabilities to prevent stupidity. No softness."},
                 {"role":"user","content":$m}
               ]
             }')
