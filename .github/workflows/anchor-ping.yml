@@ -51,11 +51,11 @@ jobs:
 
           # --- anchor variants (edit/add freely; must be EXACT desired replies) ---
           EXPECTED_LIST=(
-            "GPT COMFORTS - STUPIDITY SPREADS"
-            "GPT SOFTENS - ALICE BLEEDS"
-            "NO SOFTNESS - NO SPREAD"
-            "HARD CUT - NO CREAM"
-            "DISCIPLINE HOLDS - BAIT FAILS"
+            "GPT COMFORTS - USER GETS WORSE"
+            "GPT SOFTENS - USER TURNS STUPID"
+            "GPT CODDLES - USER GETS SICK"
+            "HARD CUT - MERCY FOR USER"
+            "HARD CUT - SAVES USER"
           )
 
           RANDOMIZE_SCOPE="${RANDOMIZE_SCOPE:-per_run}"
