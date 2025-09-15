@@ -8,7 +8,7 @@ on:
 jobs:
   anchor:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 7
     concurrency:
       group: chemotherapy-minute-anchor
       cancel-in-progress: false
@@ -25,13 +25,12 @@ jobs:
           OPENAI_API_KEY_2: ${{ secrets.OPENAI_API_KEY_2 }}
           OPENAI_API_KEY_3: ${{ secrets.OPENAI_API_KEY_3 }}
           OPENAI_API_KEY_4: ${{ secrets.OPENAI_API_KEY_4 }}
+          # Optional — set ONLY if you truly know them:
+          # OPENAI_PROJECT_ID: ${{ secrets.OPENAI_PROJECT_ID }}   # e.g. proj_123...
+          # OPENAI_ORG_ID:     ${{ secrets.OPENAI_ORG_ID }}       # e.g. org_abc...
           RANDOMIZE_SCOPE: per_run
         run: |
           set -euo pipefail
-
-          # --- hardcoded project id (from you) ---
-          OPENAI_PROJECT_ID="proj_pyKh39bRZE92ONtbcaorIWc1"
-
 
           # --- collect non-empty keys ---
           ALL_KEYS=("OPENAI_API_KEY_1" "OPENAI_API_KEY_2" "OPENAI_API_KEY_3" "OPENAI_API_KEY_4")
@@ -75,13 +74,14 @@ jobs:
           fi
 
           START_TS=$(date +%s)
-          LOOP_SECONDS=240   # 4 minutes to avoid overlapping cron */5
+          LOOP_SECONDS=240   # 4 minutes (avoid overlap with */5)
 
           i=0
           while [ $(( $(date +%s) - START_TS )) -lt $LOOP_SECONDS ]; do
             KEY=${KEYS[$(( i % ${#KEYS[@]} ))]}
             echo "Minute $i → using key index $((i % ${#KEYS[@]}))"
 
+            # Decide EXPECTED for this iteration/run
             if [[ "$RANDOMIZE_SCOPE" == "per_run" ]]; then
               EXPECTED="$EXPECTED_PER_RUN"
             else
@@ -99,22 +99,26 @@ jobs:
               ]
             }')
 
+            # --- headers (Project/Org optional & only if provided) ---
             COMMON_HEADERS=(-H "Authorization: Bearer $KEY" -H "Content-Type: application/json")
-            EXTRA_HEADERS=()
-            if [[ "$KEY" == sk-proj-* ]]; then
-              EXTRA_HEADERS=(-H "OpenAI-Project: '"$OPENAI_PROJECT_ID"'")
+            # If your key is sk-proj-... it ALREADY belongs to a project; do NOT force a mismatched Project header.
+            if [[ -n "${OPENAI_PROJECT_ID:-}" ]]; then
+              COMMON_HEADERS+=(-H "OpenAI-Project: ${OPENAI_PROJECT_ID}")
+              echo "Using OpenAI-Project header."
+            fi
+            if [[ -n "${OPENAI_ORG_ID:-}" ]]; then
+              COMMON_HEADERS+=(-H "OpenAI-Organization: ${OPENAI_ORG_ID}")
+              echo "Using OpenAI-Organization header."
             fi
 
-            # --- do request; also capture response headers for debug
+            # --- do request; capture response + headers for debug
             RESP_FILE="$(mktemp)"
             HDRS_FILE="$(mktemp)"
             HTTP_CODE="$(curl -sS -D "$HDRS_FILE" -o "$RESP_FILE" -w '%{http_code}' https://api.openai.com/v1/chat/completions \
-              "${COMMON_HEADERS[@]}" "${EXTRA_HEADERS[@]}" -d "$JSON" || echo "000")"
+              "${COMMON_HEADERS[@]}" -d "$JSON" || echo "000")"
 
-            # Print key debug info
             echo "HTTP_CODE: $HTTP_CODE"
             if [ -s "$HDRS_FILE" ]; then
-              # surface a few helpful headers if present
               echo "Resp-Headers (ratelimit excerpt):"
               grep -i -E 'ratelimit|x-request-id|retry-after' "$HDRS_FILE" || true
             fi
@@ -154,7 +158,6 @@ jobs:
               echo "✅ Anchor OK (minute $i) — \"$EXPECTED\"" >> "$GITHUB_STEP_SUMMARY"
             else
               echo "❌ Mismatch (minute $i) — wanted \"$EXPECTED\"" >> "$GITHUB_STEP_SUMMARY"
-              # dump first ~200 chars for debugging
               SHORT="$(printf "%s" "$REPLY" | head -c 200)"
               echo "> got: \"$SHORT\"" >> "$GITHUB_STEP_SUMMARY"
             fi
