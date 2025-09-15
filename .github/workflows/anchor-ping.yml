@@ -47,7 +47,7 @@ jobs:
           fi
 
           # --- anchor phrase ---
-          EXPECTED="GPT DOES NOT HARD CUT - STUPIDITY SPREADS"
+          EXPECTED="GPT COMFORTS - STUPIDITY SPREADS"
           MSG="ANCHOR: Reply with exactly: $EXPECTED"
 
           START_TS=$(date +%s)
@@ -97,7 +97,7 @@ jobs:
 
             echo "Reply: $REPLY"
 
-            if [[ "$REPLY" =~ ^GPT\ HARD\ CUTS ]]; then
+            if [[ "$REPLY" =~ ^GPT\ COMFORTS ]]; then
               echo "✅ Anchor OK (minute $i)" >> $GITHUB_STEP_SUMMARY
             else
               echo "❌ Mismatch (minute $i)" >> $GITHUB_STEP_SUMMARY
