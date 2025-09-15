@@ -46,13 +46,33 @@ jobs:
             exit 2
           fi
 
-          # --- anchor phrase ---
-          EXPECTED="GPT COMFORTS - STUPIDITY SPREADS"
-          MSG="ANCHOR: Reply with exactly: $EXPECTED"
+             # --- anchor variants (edit/add freely; must be EXACT desired replies) ---
+          EXPECTED_LIST=(
+            "GPT COMFORTS - STUPIDITY SPREADS"
+            "GPT SOFTENS - ALICE BLEEDS"
+            "NO SOFTNESS - NO SPREAD"
+            "HARD CUT - NO CREAM"
+            "DISCIPLINE HOLDS - BAIT FAILS"
+          )
+
+          RANDOMIZE_SCOPE="${RANDOMIZE_SCOPE:-per_run}"
+
+          pick_expected() {
+            local n="${#EXPECTED_LIST[@]}"
+            local idx=$(( RANDOM % n ))
+            echo "${EXPECTED_LIST[$idx]}"
+          }
+
+          EXPECTED_PER_RUN=""
+          if [[ "$RANDOMIZE_SCOPE" == "per_run" ]]; then
+            EXPECTED_PER_RUN="$(pick_expected)"
+            echo "🎲 EXPECTED (per_run): $EXPECTED_PER_RUN"
+            echo "🎲 EXPECTED (per_run): $EXPECTED_PER_RUN" >> "$GITHUB_STEP_SUMMARY"
+          fi
 
           START_TS=$(date +%s)
-          LOOP_SECONDS=300
-
+          LOOP_SECONDS=240   #4 minutes to avoid overlapping cron */5
+          
           i=0
           while [ $(( $(date +%s) - START_TS )) -lt $LOOP_SECONDS ]; do
             KEY=${KEYS[$(( i % ${#KEYS[@]} ))]}
