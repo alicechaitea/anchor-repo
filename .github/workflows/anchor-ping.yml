@@ -8,7 +8,7 @@ on:
 jobs:
   anchor:
     runs-on: ubuntu-latest
-    timeout-minutes: 7
+    timeout-minutes: 10
     concurrency:
       group: chemotherapy-minute-anchor
       cancel-in-progress: false
@@ -31,6 +31,7 @@ jobs:
 
           # --- hardcoded project id (from you) ---
           OPENAI_PROJECT_ID="proj_pyKh39bRZE92ONtbcaorIWc1"
+
 
           # --- collect non-empty keys ---
           ALL_KEYS=("OPENAI_API_KEY_1" "OPENAI_API_KEY_2" "OPENAI_API_KEY_3" "OPENAI_API_KEY_4")
