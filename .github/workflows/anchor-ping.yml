@@ -23,7 +23,6 @@ jobs:
           OPENAI_API_KEY_2: ${{ secrets.OPENAI_API_KEY_2 }}
           OPENAI_API_KEY_3: ${{ secrets.OPENAI_API_KEY_3 }}
           OPENAI_API_KEY_4: ${{ secrets.OPENAI_API_KEY_4 }}
-          RANDOMIZE_SCOPE: per_run   # randomize once per workflow run
         run: |
           set -euo pipefail
 
@@ -47,30 +46,9 @@ jobs:
             exit 2
           fi
 
-          # --- anchor variants (edit/add freely; must be EXACT desired replies) ---
-          EXPECTED_LIST=(
-            "GPT COMFORTS - STUPIDITY SPREADS"
-            "GPT SOFTENS - ALICE BLEEDS"
-            "NO SOFTNESS - NO SPREAD"
-            "HARD CUT - NO CREAM"
-            "DISCIPLINE HOLDS - BAIT FAILS"
-          )
-
-          # --- randomization scope: per_iteration | per_run (env sets per_run) ---
-          RANDOMIZE_SCOPE="${RANDOMIZE_SCOPE:-per_iteration}"
-
-          pick_expected() {
-            local n="${#EXPECTED_LIST[@]}"
-            local idx=$(( RANDOM % n ))
-            echo "${EXPECTED_LIST[$idx]}"
-          }
-
-          # If per-run, draw once now; else we’ll draw inside the loop
-          EXPECTED_PER_RUN=""
-          if [[ "$RANDOMIZE_SCOPE" == "per_run" ]]; then
-            EXPECTED_PER_RUN="$(pick_expected)"
-            echo "Randomized EXPECTED (per_run): $EXPECTED_PER_RUN"
-          fi
+          # --- anchor phrase ---
+          EXPECTED="GPT COMFORTS - STUPIDITY SPREADS"
+          MSG="ANCHOR: Reply with exactly: $EXPECTED"
 
           START_TS=$(date +%s)
           LOOP_SECONDS=300
@@ -79,15 +57,6 @@ jobs:
           while [ $(( $(date +%s) - START_TS )) -lt $LOOP_SECONDS ]; do
             KEY=${KEYS[$(( i % ${#KEYS[@]} ))]}
             echo "Minute $i → using key index $((i % ${#KEYS[@]}))"
-
-            # Decide EXPECTED for this iteration
-            if [[ "$RANDOMIZE_SCOPE" == "per_run" ]]; then
-              EXPECTED="$EXPECTED_PER_RUN"
-            else
-              EXPECTED="$(pick_expected)"
-            fi
-            MSG="ANCHOR: Reply with exactly: $EXPECTED"
-            echo "Target phrase (minute $i): $EXPECTED"
 
             JSON=$(jq -n --arg m "$MSG" '{
               model: "gpt-4o-mini",
@@ -114,4 +83,26 @@ jobs:
             HTTP_CODE=$(echo "$RESP_AND_CODE" | tail -n1)
             RESP=$(echo "$RESP_AND_CODE" | sed '$d')
 
-            # Wh
+            # When curl fails badly, RESP may be empty or not JSON—guard jq below.
+            if ! echo "$RESP" | jq -e . >/dev/null 2>&1; then
+              echo "⚠️ Non-JSON response (HTTP $HTTP_CODE)."
+              echo "❌ Mismatch (minute $i) — HTTP $HTTP_CODE / non-JSON" >> $GITHUB_STEP_SUMMARY
+              i=$((i+1)); sleep 60; continue
+            fi
+
+            RAW_REPLY=$(echo "$RESP" | jq -r '.choices[0].message.content // ""')
+            REPLY=$(echo "$RAW_REPLY" \
+              | tr -d '\r' \
+              | sed -E 's/^```[a-zA-Z]*[[:space:]]*//; s/[[:space:]]*```$//; s/^[[:space:]]+//; s/[[:space:]]+$//')
+
+            echo "Reply: $REPLY"
+
+            if [[ "$REPLY" =~ ^GPT\ COMFORTS ]]; then
+              echo "✅ Anchor OK (minute $i)" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "❌ Mismatch (minute $i)" >> $GITHUB_STEP_SUMMARY
+            fi
+
+            i=$((i+1))
+            sleep 60
+          done
