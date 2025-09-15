@@ -8,7 +8,7 @@ on:
 jobs:
   anchor:
     runs-on: ubuntu-latest
-    timeout-minutes: 7
+    timeout-minutes: 6
     concurrency:
       group: chemotherapy-minute-anchor
       cancel-in-progress: false
